@@ -83,4 +83,6 @@ def get_current_admin(
     return current_user
 
 
+# Alias for backward compatibility
+get_current_admin_user = get_current_admin
 

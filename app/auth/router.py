@@ -152,17 +152,56 @@ def login(phone: str = Form(...), password: str = Form(...), db: Session = Depen
             detail="Incorrect phone or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user"
         )
-    
+
     # Create tokens
     access_token = create_access_token(data={"sub": str(user.id), "username": user.username})
     refresh_token = create_refresh_token(data={"sub": str(user.id), "username": user.username})
-    
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
+
+
+@router.post("/admin/login", response_model=Token)
+def admin_login(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    """Admin panel uchun login endpoint - faqat ADMIN roli bo'lgan foydalanuvchilar kirishi mumkin."""
+    # Username yoki phone orqali qidirish
+    user = db.query(User).filter(
+        (User.username == username) | (User.phone == username)
+    ).first()
+
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Login yoki parol noto'g'ri",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Foydalanuvchi faol emas"
+        )
+
+    # Admin rolini tekshirish
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin huquqi yo'q. Faqat adminlar kirishi mumkin."
+        )
+
+    # Create tokens
+    access_token = create_access_token(data={"sub": str(user.id), "username": user.username, "role": "admin"})
+    refresh_token = create_refresh_token(data={"sub": str(user.id), "username": user.username, "role": "admin"})
+
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
