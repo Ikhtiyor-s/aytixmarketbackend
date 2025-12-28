@@ -114,6 +114,36 @@ class TelegramStatusResponse(BaseModel):
     message: str
 
 
+# Registration OTP Schemas
+class RegisterInitRequest(BaseModel):
+    """Ro'yxatdan o'tish boshlash - OTP yuborish uchun"""
+    first_name: str
+    last_name: str
+    phone: str
+    email: Optional[str] = None
+
+
+class RegisterInitResponse(BaseModel):
+    """Ro'yxatdan o'tish boshlash javobi"""
+    success: bool
+    message: str
+    session_id: str  # OTP sessiya ID
+    expires_in: int  # Sekundlarda
+
+
+class RegisterVerifyOTPRequest(BaseModel):
+    """Ro'yxatdan o'tish OTP tasdiqlash"""
+    session_id: str
+    otp_code: str
+
+
+class RegisterCompleteRequest(BaseModel):
+    """Ro'yxatdan o'tishni yakunlash - parol kiritish"""
+    session_id: str
+    password: str
+    password_confirm: str
+
+
 # Category Schemas
 class CategoryBase(BaseModel):
     name: str

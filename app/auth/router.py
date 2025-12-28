@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_token
 from app.models import User, UserRole, OTPRequest as OTPRequestModel, PasswordReset, TelegramUser
-from app.schemas import UserCreate, UserResponse, Token, RefreshTokenRequest, OTPRequest, OTPVerify, PasswordResetRequest, OTPResponse, TelegramStatusRequest, TelegramStatusResponse
+from app.schemas import (
+    UserCreate, UserResponse, Token, RefreshTokenRequest,
+    OTPRequest, OTPVerify, PasswordResetRequest, OTPResponse,
+    TelegramStatusRequest, TelegramStatusResponse,
+    RegisterInitRequest, RegisterInitResponse, RegisterVerifyOTPRequest, RegisterCompleteRequest
+)
 from datetime import timedelta, datetime
 from app.core.config import settings
 import random
@@ -471,4 +476,279 @@ def check_telegram_status(data: TelegramStatusRequest, db: Session = Depends(get
             phone=normalized_phone,
             message="Telegram botga ulanmagan. Iltimos, @aytix_bot ga o'ting."
         )
+
+
+# ==================== RO'YXATDAN O'TISH OTP ====================
+
+def send_registration_otp_telegram(phone: str, otp_code: str, db: Session) -> bool:
+    """Telegram orqali ro'yxatdan o'tish OTP yuborish"""
+    normalized_phone = normalize_phone(phone)
+
+    telegram_user = db.query(TelegramUser).filter(
+        TelegramUser.phone == normalized_phone,
+        TelegramUser.is_active == True
+    ).first()
+
+    if not telegram_user:
+        logger.warning(f"Telegram foydalanuvchi topilmadi: {normalized_phone}")
+        return False
+
+    try:
+        bot_token = settings.TELEGRAM_BOT_TOKEN
+        chat_id = telegram_user.chat_id
+
+        message = f"""
+🔐 *AyTiX - Ro'yxatdan o'tish*
+
+Sizning tasdiqlash kodingiz:
+
+`{otp_code}`
+
+⏱ Kod 1 daqiqa ichida amal qiladi.
+
+⚠️ Bu kodni hech kimga bermang!
+"""
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "Markdown"
+        }
+
+        with httpx.Client() as client:
+            response = client.post(url, json=payload, timeout=10.0)
+            response_data = response.json()
+
+            if response_data.get("ok"):
+                logger.info(f"Ro'yxatdan o'tish OTP yuborildi: phone={normalized_phone}")
+                return True
+            else:
+                logger.error(f"Telegram xatolik: {response_data}")
+                return False
+
+    except Exception as e:
+        logger.error(f"Telegram OTP yuborishda xatolik: {e}")
+        return False
+
+
+@router.post("/register/init", response_model=RegisterInitResponse)
+def register_init(data: RegisterInitRequest, db: Session = Depends(get_db)):
+    """Ro'yxatdan o'tishni boshlash - OTP yuborish"""
+    import uuid
+    now = datetime.utcnow()
+
+    # Telefon raqamini normalizatsiya qilish
+    normalized_phone = normalize_phone(data.phone)
+
+    # Foydalanuvchi allaqachon mavjudligini tekshirish
+    existing_user = db.query(User).filter(User.phone == normalized_phone).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Bu telefon raqam allaqachon ro'yxatdan o'tgan"
+        )
+
+    # Telegram botga ulanganligini tekshirish
+    telegram_user = db.query(TelegramUser).filter(
+        TelegramUser.phone == normalized_phone,
+        TelegramUser.is_active == True
+    ).first()
+
+    if not telegram_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Telegram botga ulanmagansiz. Iltimos, avval @aytix_bot ga o'ting va telefon raqamingizni ulang."
+        )
+
+    # Rate limiting
+    one_hour_ago = now - timedelta(hours=1)
+    recent_requests = db.query(OTPRequestModel).filter(
+        OTPRequestModel.phone == normalized_phone,
+        OTPRequestModel.created_at > one_hour_ago
+    ).count()
+
+    if recent_requests >= MAX_REQUESTS_PER_HOUR:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Soatiga {MAX_REQUESTS_PER_HOUR} ta OTP so'rash mumkin. Keyinroq urinib ko'ring."
+        )
+
+    # Session ID va OTP yaratish
+    session_id = str(uuid.uuid4())
+    otp_code = generate_otp()
+    expires_at = now + timedelta(seconds=OTP_EXPIRY_SECONDS)
+
+    # OTP saqlash - session_id va foydalanuvchi ma'lumotlarini saqlash
+    # Email maydoniga vaqtincha foydalanuvchi ma'lumotlarini JSON sifatida saqlash
+    import json
+    user_data_json = json.dumps({
+        "first_name": data.first_name,
+        "last_name": data.last_name,
+        "email": data.email,
+        "session_id": session_id
+    })
+
+    otp_record = OTPRequestModel(
+        phone=normalized_phone,
+        email=user_data_json,  # Vaqtincha JSON ma'lumot sifatida
+        otp_code=otp_code,
+        expires_at=expires_at
+    )
+    db.add(otp_record)
+    db.commit()
+
+    # OTP yuborish
+    success = send_registration_otp_telegram(normalized_phone, otp_code, db)
+    if not success:
+        db.delete(otp_record)
+        db.commit()
+        raise HTTPException(
+            status_code=500,
+            detail="OTP yuborishda xatolik. Iltimos, qayta urinib ko'ring."
+        )
+
+    return RegisterInitResponse(
+        success=True,
+        message="Tasdiqlash kodi Telegram orqali yuborildi",
+        session_id=session_id,
+        expires_in=OTP_EXPIRY_SECONDS
+    )
+
+
+@router.post("/register/verify-otp", response_model=OTPResponse)
+def register_verify_otp(data: RegisterVerifyOTPRequest, db: Session = Depends(get_db)):
+    """Ro'yxatdan o'tish OTP tasdiqlash"""
+    import json
+    now = datetime.utcnow()
+
+    # Session ID bo'yicha OTP topish
+    otp_records = db.query(OTPRequestModel).filter(
+        OTPRequestModel.is_used == False,
+        OTPRequestModel.expires_at > now
+    ).all()
+
+    otp_record = None
+    for record in otp_records:
+        if record.email:
+            try:
+                user_data = json.loads(record.email)
+                if user_data.get("session_id") == data.session_id:
+                    otp_record = record
+                    break
+            except:
+                continue
+
+    if not otp_record:
+        raise HTTPException(status_code=400, detail="Sessiya topilmadi yoki muddati o'tgan")
+
+    # Bloklangan yoki yo'qligini tekshirish
+    if otp_record.blocked_until and otp_record.blocked_until > now:
+        remaining = (otp_record.blocked_until - now).seconds // 60
+        raise HTTPException(
+            status_code=429,
+            detail=f"Juda ko'p xato urinish. {remaining} daqiqadan keyin qayta urinib ko'ring."
+        )
+
+    # OTP tekshirish
+    if otp_record.otp_code != data.otp_code:
+        otp_record.attempts += 1
+
+        if otp_record.attempts >= MAX_OTP_ATTEMPTS:
+            otp_record.blocked_until = now + timedelta(minutes=BLOCK_DURATION_MINUTES)
+            db.commit()
+            raise HTTPException(
+                status_code=429,
+                detail=f"{MAX_OTP_ATTEMPTS} marta xato kiritdingiz. {BLOCK_DURATION_MINUTES} daqiqadan keyin qayta urinib ko'ring."
+            )
+
+        db.commit()
+        remaining_attempts = MAX_OTP_ATTEMPTS - otp_record.attempts
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tasdiqlash kodi xato! {remaining_attempts} ta urinish qoldi"
+        )
+
+    # OTP to'g'ri - ishlatilgan deb belgilash
+    otp_record.is_used = True
+    db.commit()
+
+    return OTPResponse(
+        success=True,
+        message="Tasdiqlash kodi to'g'ri. Endi parol kiriting."
+    )
+
+
+@router.post("/register/complete", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def register_complete(data: RegisterCompleteRequest, db: Session = Depends(get_db)):
+    """Ro'yxatdan o'tishni yakunlash - parol kiritish va akkaunt yaratish"""
+    import json
+    now = datetime.utcnow()
+
+    # Parollarni tekshirish
+    if data.password != data.password_confirm:
+        raise HTTPException(status_code=400, detail="Parollar mos kelmayapti")
+
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Parol kamida 6 ta belgidan iborat bo'lishi kerak")
+
+    # Session ID bo'yicha tasdiqlangan OTP topish
+    # Muddati 5 daqiqa ichida tasdiqlangan bo'lishi kerak
+    five_minutes_ago = now - timedelta(minutes=5)
+    otp_records = db.query(OTPRequestModel).filter(
+        OTPRequestModel.is_used == True,
+        OTPRequestModel.expires_at > five_minutes_ago
+    ).all()
+
+    otp_record = None
+    user_data = None
+    for record in otp_records:
+        if record.email:
+            try:
+                parsed_data = json.loads(record.email)
+                if parsed_data.get("session_id") == data.session_id:
+                    otp_record = record
+                    user_data = parsed_data
+                    break
+            except:
+                continue
+
+    if not otp_record or not user_data:
+        raise HTTPException(status_code=400, detail="Sessiya topilmadi yoki muddati o'tgan. Qaytadan ro'yxatdan o'ting.")
+
+    # Foydalanuvchi allaqachon mavjudligini tekshirish (yana bir bor)
+    existing_user = db.query(User).filter(User.phone == otp_record.phone).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Bu telefon raqam allaqachon ro'yxatdan o'tgan"
+        )
+
+    # Email yaratish
+    phone_digits = otp_record.phone.replace("+", "")
+    email = user_data.get("email") if user_data.get("email") else f"{phone_digits}@aytix.uz"
+
+    # Username yaratish
+    username = f"user_{phone_digits}"
+
+    # Full name
+    full_name = f"{user_data.get('first_name', '')} {user_data.get('last_name', '')}"
+
+    # Foydalanuvchi yaratish
+    hashed_password = get_password_hash(data.password)
+    new_user = User(
+        phone=otp_record.phone,
+        username=username,
+        full_name=full_name,
+        first_name=user_data.get("first_name", ""),
+        last_name=user_data.get("last_name", ""),
+        email=email,
+        hashed_password=hashed_password,
+        role=UserRole.USER
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
 
