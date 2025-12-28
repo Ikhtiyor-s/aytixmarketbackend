@@ -45,9 +45,13 @@ env/
 *.log
 logs/
 
-# Uploads (local)
-uploads/
+# Uploads (media files only, not app/uploads code)
+/uploads/
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Test files
+test_*.py
+delete_*.py
