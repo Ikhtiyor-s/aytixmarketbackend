@@ -19,7 +19,11 @@ class Settings(BaseSettings):
         "http://localhost:3001",
         "http://localhost:3002",
         "http://localhost:3003",
-        "http://localhost:3004"
+        "http://localhost:3004",
+        "http://localhost:3005",
+        "http://localhost:3006",
+        "http://localhost:3007",
+        "http://localhost:3008"
     ]
 
     # App
@@ -34,6 +38,9 @@ class Settings(BaseSettings):
     # Telegram Bot settings
     TELEGRAM_BOT_TOKEN: str = "8286502631:AAFCFehjDPnLLPwnz3ZPBiSyogRv_Y263rI"
     TELEGRAM_BOT_USERNAME: str = "aytixuz_bot"
+
+    # OpenAI settings
+    OPENAI_API_KEY: str = ""
 
     class Config:
         env_file = ".env"

@@ -35,34 +35,67 @@ def get_dashboard_stats(
     current_user = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
-    """Get comprehensive dashboard statistics."""
+    """Get comprehensive dashboard statistics with period filtering."""
     now = datetime.utcnow()
-    this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    last_month_start = (this_month_start - timedelta(days=1)).replace(day=1)
-    this_week_start = now - timedelta(days=7)
-    last_week_start = now - timedelta(days=14)
 
-    # Users stats
+    # Period ga qarab vaqt oraliqlarini aniqlash
+    if period == "daily":
+        current_period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        previous_period_start = current_period_start - timedelta(days=1)
+        previous_period_end = current_period_start
+    elif period == "weekly":
+        current_period_start = now - timedelta(days=7)
+        previous_period_start = now - timedelta(days=14)
+        previous_period_end = current_period_start
+    elif period == "monthly":
+        current_period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        previous_period_start = (current_period_start - timedelta(days=1)).replace(day=1)
+        previous_period_end = current_period_start
+    elif period == "yearly":
+        current_period_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        previous_period_start = current_period_start.replace(year=current_period_start.year - 1)
+        previous_period_end = current_period_start
+    else:  # default weekly
+        current_period_start = now - timedelta(days=7)
+        previous_period_start = now - timedelta(days=14)
+        previous_period_end = current_period_start
+
+    # Users stats - joriy davr
     total_users = db.query(func.count(User.id)).scalar() or 0
     active_users = db.query(func.count(User.id)).filter(User.is_active == True).scalar() or 0
-    new_users_this_month = db.query(func.count(User.id)).filter(User.created_at >= this_month_start).scalar() or 0
-    new_users_last_month = db.query(func.count(User.id)).filter(
-        User.created_at >= last_month_start,
-        User.created_at < this_month_start
+    new_users_current = db.query(func.count(User.id)).filter(User.created_at >= current_period_start).scalar() or 0
+    new_users_previous = db.query(func.count(User.id)).filter(
+        User.created_at >= previous_period_start,
+        User.created_at < previous_period_end
     ).scalar() or 0
-    new_users_this_week = db.query(func.count(User.id)).filter(User.created_at >= this_week_start).scalar() or 0
 
-    # Projects stats
+    # Projects stats - joriy davr
     total_projects = db.query(func.count(Project.id)).scalar() or 0
-    total_project_views = db.query(func.sum(Project.views)).scalar() or 0
-    projects_this_month = db.query(func.count(Project.id)).filter(Project.created_at >= this_month_start).scalar() or 0
-    projects_last_month = db.query(func.count(Project.id)).filter(
-        Project.created_at >= last_month_start,
-        Project.created_at < this_month_start
+
+    # Views - joriy davrda yaratilgan loyihalar ko'rishlari
+    views_current = db.query(func.sum(Project.views)).filter(
+        Project.created_at >= current_period_start
+    ).scalar() or 0
+    views_previous = db.query(func.sum(Project.views)).filter(
+        Project.created_at >= previous_period_start,
+        Project.created_at < previous_period_end
+    ).scalar() or 0
+    # Agar joriy davrda loyiha yo'q bo'lsa, umumiy ko'rishlarni ko'rsat
+    if views_current == 0:
+        views_current = db.query(func.sum(Project.views)).scalar() or 0
+
+    projects_current = db.query(func.count(Project.id)).filter(Project.created_at >= current_period_start).scalar() or 0
+    projects_previous = db.query(func.count(Project.id)).filter(
+        Project.created_at >= previous_period_start,
+        Project.created_at < previous_period_end
     ).scalar() or 0
 
-    # Messages stats
-    total_messages = db.query(func.count(Message.id)).scalar() or 0
+    # Messages stats - joriy davr
+    messages_current = db.query(func.count(Message.id)).filter(Message.created_at >= current_period_start).scalar() or 0
+    messages_previous = db.query(func.count(Message.id)).filter(
+        Message.created_at >= previous_period_start,
+        Message.created_at < previous_period_end
+    ).scalar() or 0
     new_messages = db.query(func.count(Message.id)).filter(Message.status == MessageStatus.NEW).scalar() or 0
 
     # Partners & Integrations
@@ -79,46 +112,52 @@ def get_dashboard_stats(
             return 100 if current > 0 else 0
         return round(((current - previous) / previous) * 100, 1)
 
-    users_growth = calc_growth(new_users_this_month, new_users_last_month)
-    projects_growth = calc_growth(projects_this_month, projects_last_month)
+    users_growth = calc_growth(new_users_current, new_users_previous)
+    projects_growth = calc_growth(projects_current, projects_previous)
+    views_growth = calc_growth(views_current, views_previous)
 
-    # Simulate additional stats for dashboard cards
-    # Revenue (simulated based on messages/leads)
-    total_revenue = total_messages * 150000  # 150k per lead
-    revenue_growth = 12.5
+    # Revenue (simulated based on messages/leads) - joriy davr
+    revenue_current = messages_current * 150000  # 150k per lead
+    revenue_previous = messages_previous * 150000
+    revenue_growth = calc_growth(revenue_current, revenue_previous)
 
-    # Leads (messages are leads)
-    total_leads = new_messages + (total_messages // 4)
-    leads_growth = 8.3
+    # Leads (messages are leads) - joriy davr
+    leads_current = messages_current
+    leads_previous = messages_previous
+    leads_growth = calc_growth(leads_current, leads_previous)
 
-    # Conversion rate
-    conversion_rate = round((total_leads / max(total_project_views, 1)) * 100, 2) if total_project_views > 0 else 0
-    conversion_growth = 3.2
+    # Conversion rate - joriy davr
+    conversion_rate = round((leads_current / max(views_current, 1)) * 100, 2) if views_current > 0 else 0
+    conversion_previous = round((leads_previous / max(views_previous, 1)) * 100, 2) if views_previous > 0 else 0
+    conversion_growth = calc_growth(conversion_rate, conversion_previous) if conversion_previous > 0 else 3.2
 
     return {
+        "period": period,
         "users": {
             "total": total_users,
             "active": active_users,
-            "new_this_month": new_users_this_month,
-            "new_this_week": new_users_this_week,
+            "current_period": new_users_current,
             "growth": users_growth
         },
         "projects": {
             "total": total_projects,
-            "views": total_project_views,
-            "new_this_month": projects_this_month,
+            "current_period": projects_current,
             "growth": projects_growth
         },
+        "views": {
+            "total": views_current,
+            "growth": views_growth
+        },
         "messages": {
-            "total": total_messages,
+            "total": messages_current,
             "new": new_messages
         },
         "revenue": {
-            "total": total_revenue,
+            "total": revenue_current,
             "growth": revenue_growth
         },
         "leads": {
-            "total": total_leads,
+            "total": leads_current,
             "growth": leads_growth
         },
         "conversion": {

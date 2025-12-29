@@ -18,6 +18,7 @@ from app.messages.router import router as messages_router
 from app.partners.router import router as partners_router
 from app.integrations.router import router as integrations_router
 from app.ai_features.router import router as ai_features_router
+from app.translate.router import router as translate_router
 import os
 
 # Create database tables
@@ -63,6 +64,7 @@ app.include_router(messages_router, prefix=settings.API_V1_PREFIX)
 app.include_router(partners_router, prefix=settings.API_V1_PREFIX)
 app.include_router(integrations_router, prefix=settings.API_V1_PREFIX)
 app.include_router(ai_features_router, prefix=settings.API_V1_PREFIX)
+app.include_router(translate_router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")
