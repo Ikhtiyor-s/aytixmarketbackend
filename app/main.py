@@ -41,11 +41,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create uploads directory if it doesn't exist
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# Doimiy uploads papkasi (loyiha tashqarisida - git bilan o'chib ketmaydi)
+UPLOAD_DIR = "C:/Users/Asus/aytix_uploads"
+IMAGES_DIR = os.path.join(UPLOAD_DIR, "images")
+VIDEOS_DIR = os.path.join(UPLOAD_DIR, "videos")
 
-# Mount static files for uploads
+# Papkalarni yaratish
+os.makedirs(IMAGES_DIR, exist_ok=True)
+os.makedirs(VIDEOS_DIR, exist_ok=True)
+print(f"UPLOAD_DIR: {UPLOAD_DIR}")
+
+# Mount static files for uploads (images va videos)
+app.mount("/uploads/images", StaticFiles(directory=IMAGES_DIR), name="images")
+app.mount("/uploads/videos", StaticFiles(directory=VIDEOS_DIR), name="videos")
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Include routers

@@ -9,8 +9,14 @@ from app.core.database import get_db
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# Doimiy uploads papkasi (loyiha tashqarisida - git bilan o'chib ketmaydi)
+UPLOAD_DIR = "C:/Users/Asus/aytix_uploads"
+IMAGES_DIR = os.path.join(UPLOAD_DIR, "images")
+VIDEOS_DIR = os.path.join(UPLOAD_DIR, "videos")
+
+# Papkalarni yaratish
+os.makedirs(IMAGES_DIR, exist_ok=True)
+os.makedirs(VIDEOS_DIR, exist_ok=True)
 
 
 @router.post("/image")
@@ -22,7 +28,7 @@ async def upload_image(file: UploadFile = File(...)):
     # Generate unique filename
     ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
     filename = f"{uuid.uuid4()}.{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
+    filepath = os.path.join(IMAGES_DIR, filename)
 
     # Save file
     async with aiofiles.open(filepath, "wb") as f:
@@ -31,7 +37,7 @@ async def upload_image(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="File too large")
         await f.write(content)
 
-    return {"filename": filename, "url": f"/uploads/{filename}"}
+    return {"filename": filename, "url": f"/uploads/images/{filename}"}
 
 
 @router.post("/video")
@@ -43,7 +49,7 @@ async def upload_video(file: UploadFile = File(...)):
     # Generate unique filename
     ext = file.filename.split(".")[-1] if "." in file.filename else "mp4"
     filename = f"{uuid.uuid4()}.{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
+    filepath = os.path.join(VIDEOS_DIR, filename)
 
     # Save file
     async with aiofiles.open(filepath, "wb") as f:
@@ -52,14 +58,24 @@ async def upload_video(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="File too large")
         await f.write(content)
 
-    return {"filename": filename, "url": f"/uploads/{filename}"}
+    return {"filename": filename, "url": f"/uploads/videos/{filename}"}
 
 
-@router.delete("/{filename}")
-async def delete_file(filename: str):
-    """Delete an uploaded file."""
-    filepath = os.path.join(UPLOAD_DIR, filename)
+@router.delete("/images/{filename}")
+async def delete_image(filename: str):
+    """Delete an uploaded image."""
+    filepath = os.path.join(IMAGES_DIR, filename)
     if os.path.exists(filepath):
         os.remove(filepath)
-        return {"message": "File deleted"}
-    raise HTTPException(status_code=404, detail="File not found")
+        return {"message": "Image deleted"}
+    raise HTTPException(status_code=404, detail="Image not found")
+
+
+@router.delete("/videos/{filename}")
+async def delete_video(filename: str):
+    """Delete an uploaded video."""
+    filepath = os.path.join(VIDEOS_DIR, filename)
+    if os.path.exists(filepath):
+        os.remove(filepath)
+        return {"message": "Video deleted"}
+    raise HTTPException(status_code=404, detail="Video not found")

@@ -23,7 +23,9 @@ class Settings(BaseSettings):
         "http://localhost:3005",
         "http://localhost:3006",
         "http://localhost:3007",
-        "http://localhost:3008"
+        "http://localhost:3008",
+        "http://localhost:3010",
+        "http://localhost:3020"
     ]
 
     # App
