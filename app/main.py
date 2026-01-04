@@ -41,8 +41,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Doimiy uploads papkasi (loyiha tashqarisida - git bilan o'chib ketmaydi)
-UPLOAD_DIR = "C:/Users/Asus/aytix_uploads"
+# Doimiy uploads papkasi (D: diskda - git bilan o'chib ketmaydi)
+UPLOAD_DIR = "D:/aytix/uploads"
 IMAGES_DIR = os.path.join(UPLOAD_DIR, "images")
 VIDEOS_DIR = os.path.join(UPLOAD_DIR, "videos")
 
