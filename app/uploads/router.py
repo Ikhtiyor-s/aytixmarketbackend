@@ -9,8 +9,8 @@ from app.core.database import get_db
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
-# Doimiy uploads papkasi (loyiha tashqarisida - git bilan o'chib ketmaydi)
-UPLOAD_DIR = "C:/Users/Asus/aytix_uploads"
+# Doimiy uploads papkasi (D: diskda - git bilan o'chib ketmaydi)
+UPLOAD_DIR = "D:/aytix/uploads"
 IMAGES_DIR = os.path.join(UPLOAD_DIR, "images")
 VIDEOS_DIR = os.path.join(UPLOAD_DIR, "videos")
 
@@ -38,6 +38,32 @@ async def upload_image(file: UploadFile = File(...)):
         await f.write(content)
 
     return {"filename": filename, "url": f"/uploads/images/{filename}"}
+
+
+@router.post("/images")
+async def upload_multiple_images(files: list[UploadFile] = File(...)):
+    """Upload multiple image files."""
+    urls = []
+
+    for file in files:
+        if file.content_type not in settings.ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail=f"Invalid image type: {file.filename}")
+
+        # Generate unique filename
+        ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+        filename = f"{uuid.uuid4()}.{ext}"
+        filepath = os.path.join(IMAGES_DIR, filename)
+
+        # Save file
+        async with aiofiles.open(filepath, "wb") as f:
+            content = await file.read()
+            if len(content) > settings.MAX_UPLOAD_SIZE:
+                raise HTTPException(status_code=400, detail=f"File too large: {file.filename}")
+            await f.write(content)
+
+        urls.append(f"/uploads/images/{filename}")
+
+    return {"urls": urls}
 
 
 @router.post("/video")

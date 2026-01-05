@@ -139,6 +139,9 @@ class Product(Base):
     price = Column(Float, nullable=False)
     stock = Column(Integer, default=0, nullable=False)
     image_url = Column(String, nullable=True)
+    
+    # Video/GIF
+    video_url = Column(String, nullable=True)
     status = Column(SQLEnum(ProductStatus), default=ProductStatus.PENDING, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -210,6 +213,8 @@ class Project(Base):
     # Visual
     color = Column(String, default="from-primary-500 to-primary-600")
     image_url = Column(String, nullable=True)
+    
+    # Video/GIF
     video_url = Column(String, nullable=True)
     images = Column(JSON, nullable=True)  # Array of additional image URLs
 
@@ -245,6 +250,9 @@ class News(Base):
 
     # Image
     image_url = Column(String, nullable=True)
+    
+    # Video/GIF
+    video_url = Column(String, nullable=True)
 
     # Target audience
     target = Column(SQLEnum(TargetAudience), default=TargetAudience.ALL)
@@ -278,6 +286,9 @@ class Banner(Base):
 
     # Image
     image_url = Column(String, nullable=True)
+    
+    # Video/GIF
+    video_url = Column(String, nullable=True)
 
     # Link
     link_url = Column(String, nullable=True)
@@ -432,6 +443,62 @@ class Integration(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class IntegrationProject(Base):
+    """Integratsiya loyihalari - Aytix integratsiya xizmati mijozlari (Nonbor, va boshqalar)
+    Bu marketplace loyihalari (Project) bilan bog'liq EMAS - alohida servis!"""
+    __tablename__ = "integration_projects"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Multilingual fields
+    name_uz = Column(String, nullable=False)
+    name_ru = Column(String, nullable=True)
+    name_en = Column(String, nullable=True)
+
+    description_uz = Column(Text, nullable=True)
+    description_ru = Column(Text, nullable=True)
+    description_en = Column(Text, nullable=True)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationship - ulangan integratsiyalar
+    connected_integrations = relationship("ConnectedIntegration", back_populates="integration_project")
+
+
+class ConnectedIntegration(Base):
+    """Ulangan integratsiyalar - loyiha + servis konfiguratsiyasi bilan"""
+    __tablename__ = "connected_integrations"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Which integration project this belongs to (Nonbor, etc) - NOT marketplace project!
+    integration_project_id = Column(Integer, ForeignKey("integration_projects.id"), nullable=True, index=True)
+
+    # Integration identifier (amocrm, zadarma, telegram, etc)
+    integration_id = Column(String, nullable=False, index=True)
+
+    # Display name
+    name = Column(String, nullable=False)
+
+    # Configuration (JSON - API keys, tokens, etc)
+    config = Column(JSON, nullable=False, default={})
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationship
+    integration_project = relationship("IntegrationProject", back_populates="connected_integrations")
 
 
 class AuthMethod(str, enum.Enum):

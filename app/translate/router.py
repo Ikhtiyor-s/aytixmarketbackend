@@ -2,7 +2,10 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 from deep_translator import GoogleTranslator
+from sqlalchemy.orm import Session
 from app.dependencies import get_current_admin_user
+from app.core.database import get_db
+from app.models import CategoryProject, SubcategoryProject
 import logging
 
 logger = logging.getLogger(__name__)
@@ -139,6 +142,89 @@ async def translate_batch(
 
     except Exception as e:
         logger.error(f"Batch tarjima xatoligi: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Tarjima qilishda xatolik: {str(e)}"
+        )
+
+
+@router.post("/categories/all")
+async def translate_all_categories(
+    current_user = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Barcha kategoriya va subkategoriyalarni avtomatik tarjima qilish.
+    O'zbek tilidan rus va ingliz tillariga tarjima qiladi.
+    """
+    try:
+        translated_count = 0
+        errors = []
+
+        # Kategoriyalarni olish
+        categories = db.query(CategoryProject).all()
+
+        for category in categories:
+            try:
+                # Agar name_uz bo'lsa va name_ru/name_en bo'sh bo'lsa
+                if category.name_uz:
+                    # Rus tiliga tarjima
+                    if not category.name_ru or category.name_ru.strip() == '':
+                        category.name_ru = translate_text_google(category.name_uz, 'uz', 'ru')
+
+                    # Ingliz tiliga tarjima
+                    if not category.name_en or category.name_en.strip() == '':
+                        category.name_en = translate_text_google(category.name_uz, 'uz', 'en')
+
+                # Description tarjimasi
+                if category.description_uz:
+                    if not category.description_ru or category.description_ru.strip() == '':
+                        category.description_ru = translate_text_google(category.description_uz, 'uz', 'ru')
+
+                    if not category.description_en or category.description_en.strip() == '':
+                        category.description_en = translate_text_google(category.description_uz, 'uz', 'en')
+
+                translated_count += 1
+                logger.info(f"Kategoriya tarjima qilindi: {category.name_uz}")
+
+            except Exception as e:
+                errors.append(f"Kategoriya {category.id}: {str(e)}")
+                logger.error(f"Kategoriya tarjima xatosi {category.id}: {str(e)}")
+
+        # Subkategoriyalarni olish
+        subcategories = db.query(SubcategoryProject).all()
+
+        for subcat in subcategories:
+            try:
+                if subcat.name_uz:
+                    # Rus tiliga tarjima
+                    if not subcat.name_ru or subcat.name_ru.strip() == '':
+                        subcat.name_ru = translate_text_google(subcat.name_uz, 'uz', 'ru')
+
+                    # Ingliz tiliga tarjima
+                    if not subcat.name_en or subcat.name_en.strip() == '':
+                        subcat.name_en = translate_text_google(subcat.name_uz, 'uz', 'en')
+
+                translated_count += 1
+                logger.info(f"Subkategoriya tarjima qilindi: {subcat.name_uz}")
+
+            except Exception as e:
+                errors.append(f"Subkategoriya {subcat.id}: {str(e)}")
+                logger.error(f"Subkategoriya tarjima xatosi {subcat.id}: {str(e)}")
+
+        # O'zgarishlarni saqlash
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"{translated_count} ta element tarjima qilindi",
+            "translated_count": translated_count,
+            "errors": errors if errors else None
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Tarjima xatoligi: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Tarjima qilishda xatolik: {str(e)}"

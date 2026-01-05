@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Any, Union
 from datetime import datetime
 from app.models import UserRole, OrderStatus, ProductStatus, ProjectStatus, ContentStatus, TargetAudience, MessageStatus, PartnerStatus, IntegrationStatus
 
@@ -270,7 +270,7 @@ class ProjectBase(BaseModel):
     category: str
     subcategory: Optional[str] = None
     technologies: Optional[List[str]] = []
-    features: Optional[List[str]] = []
+    features: Optional[Any] = []  # Can be List[str] or List[{uz, ru, en}]
     integrations: Optional[List[str]] = []
     color: Optional[str] = "from-primary-500 to-primary-600"
     image_url: Optional[str] = None
@@ -295,7 +295,7 @@ class ProjectUpdate(BaseModel):
     category: Optional[str] = None
     subcategory: Optional[str] = None
     technologies: Optional[List[str]] = None
-    features: Optional[List[str]] = None
+    features: Optional[Any] = None  # Can be List[str] or List[{uz, ru, en}]
     integrations: Optional[List[str]] = None
     color: Optional[str] = None
     image_url: Optional[str] = None
@@ -441,6 +441,7 @@ class BannerBase(BaseModel):
     description_ru: Optional[str] = None
     description_en: Optional[str] = None
     image_url: Optional[str] = None
+    video_url: Optional[str] = None
     link_url: Optional[str] = None
     project_id: Optional[int] = None
     order: Optional[int] = 0
@@ -459,6 +460,7 @@ class BannerUpdate(BaseModel):
     description_ru: Optional[str] = None
     description_en: Optional[str] = None
     image_url: Optional[str] = None
+    video_url: Optional[str] = None
     link_url: Optional[str] = None
     project_id: Optional[int] = None
     order: Optional[int] = None
@@ -467,6 +469,7 @@ class BannerUpdate(BaseModel):
 
 class BannerResponse(BannerBase):
     id: int
+    video_url: Optional[str] = None  # Explicitly include video_url
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -616,6 +619,95 @@ class IntegrationResponse(IntegrationBase):
 
     class Config:
         from_attributes = True
+
+
+# ============== Integration Project Schemas (Aytix Integration Service Clients) ==============
+# Bu marketplace loyihalari (Project) bilan bog'liq EMAS - alohida servis!
+
+class IntegrationProjectBase(BaseModel):
+    """Integratsiya loyihasi - Aytix integratsiya xizmati mijozlari"""
+    name_uz: str
+    name_ru: Optional[str] = None
+    name_en: Optional[str] = None
+    description_uz: Optional[str] = None
+    description_ru: Optional[str] = None
+    description_en: Optional[str] = None
+    is_active: Optional[bool] = True
+
+
+class IntegrationProjectCreate(IntegrationProjectBase):
+    pass
+
+
+class IntegrationProjectUpdate(BaseModel):
+    name_uz: Optional[str] = None
+    name_ru: Optional[str] = None
+    name_en: Optional[str] = None
+    description_uz: Optional[str] = None
+    description_ru: Optional[str] = None
+    description_en: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class IntegrationProjectResponse(IntegrationProjectBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class IntegrationProjectMinimal(BaseModel):
+    """Minimal integration project info for connected integration response"""
+    id: int
+    name_uz: str
+    name_ru: Optional[str] = None
+    name_en: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Connected Integration Schemas (IntegrationProject + Service integration)
+class ConnectedIntegrationBase(BaseModel):
+    integration_project_id: Optional[int] = None  # Qaysi integratsiya loyihasiga ulanadi (Nonbor, etc)
+    integration_id: str  # Servis nomi (yandex_delivery, click, amocrm)
+    name: str
+    config: dict = {}
+    is_active: bool = True
+
+
+class ConnectedIntegrationCreate(ConnectedIntegrationBase):
+    pass
+
+
+class ConnectedIntegrationUpdate(BaseModel):
+    integration_project_id: Optional[int] = None
+    integration_id: Optional[str] = None
+    name: Optional[str] = None
+    config: Optional[dict] = None
+    is_active: Optional[bool] = None
+
+
+class ConnectedIntegrationResponse(ConnectedIntegrationBase):
+    id: int
+    integration_project: Optional[IntegrationProjectMinimal] = None  # Loyiha ma'lumotlari
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class IntegrationTestRequest(BaseModel):
+    integration_id: str
+    config: dict
+
+
+class IntegrationTestResponse(BaseModel):
+    success: bool
+    message: str
 
 
 # AI Feature Schemas
