@@ -27,6 +27,7 @@ class Settings(BaseSettings):
         "http://localhost:3009",
         "http://localhost:3010",
         "http://localhost:3020"
+        https://admin.aytix.uz
     ]
 
     # App
