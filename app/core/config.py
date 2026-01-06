@@ -29,7 +29,8 @@ class Settings(BaseSettings):
         "http://localhost:3015",
         "http://localhost:3020",
         "https://admin.aytix.uz",
-        "https://aytix.uz"
+        "https://aytix.uz",
+        "https://api.aytix.uz"
     ]
 
     # App
