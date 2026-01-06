@@ -55,12 +55,6 @@ test_*.py
 delete_*.py
 app/uploads/files/
 
-# Uploads (production files)
-uploads/images/*
-uploads/videos/*
-!uploads/images/.gitkeep
-!uploads/videos/.gitkeep
-
 # Backup files
 *.backup
 *.bak
