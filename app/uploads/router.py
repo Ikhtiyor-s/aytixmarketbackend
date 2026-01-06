@@ -9,9 +9,9 @@ from app.core.database import get_db
 
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
-# Uploads papkasi - app/uploads ichida
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads", "files")
+# Backend papkasida uploads saqlash
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 IMAGES_DIR = os.path.join(UPLOAD_DIR, "images")
 VIDEOS_DIR = os.path.join(UPLOAD_DIR, "videos")
 

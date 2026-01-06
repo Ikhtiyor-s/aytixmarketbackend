@@ -41,8 +41,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Doimiy uploads papkasi (D: diskda - git bilan o'chib ketmaydi)
-UPLOAD_DIR = "D:/aytix/uploads"
+# Backend papkasida uploads saqlash
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIR = os.path.join(os.path.dirname(BASE_DIR), "uploads")
 IMAGES_DIR = os.path.join(UPLOAD_DIR, "images")
 VIDEOS_DIR = os.path.join(UPLOAD_DIR, "videos")
 
@@ -83,8 +84,3 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
-
-# Trigger reload v2
-
-
-

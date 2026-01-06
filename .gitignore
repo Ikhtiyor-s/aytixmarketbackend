@@ -45,8 +45,6 @@ env/
 *.log
 logs/
 
-# Uploads (media files only, not app/uploads code)
-/uploads/
 
 # OS
 .DS_Store
