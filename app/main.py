@@ -3,12 +3,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from app.core.config import settings
+from app.core.database import engine, Base
 import logging
+import os
 
 # Logger setup
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
-from app.core.database import engine, Base
+# Routers
 from app.auth.router import router as auth_router
 from app.users.router import router as users_router
 from app.products.router import router as products_router
@@ -25,7 +30,6 @@ from app.partners.router import router as partners_router
 from app.integrations.router import router as integrations_router
 from app.ai_features.router import router as ai_features_router
 from app.translate.router import router as translate_router
-import os
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -89,14 +93,21 @@ def root():
 
 @app.get("/health")
 def health():
+    """Health check endpoint for monitoring."""
     return {"status": "healthy"}
 
 
-# Global exception handler
+@app.get("/api/v1/health")
+def api_health():
+    """API health check endpoint."""
+    return {"status": "healthy", "version": "1.0.0"}
+
+
+# Global exception handler with CORS support
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle all unhandled exceptions."""
-    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    """Handle all unhandled exceptions with CORS headers."""
+    logger.error(f"Unhandled exception on {request.url}: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={"detail": f"Internal server error: {str(exc)}"},
@@ -106,3 +117,12 @@ async def global_exception_handler(request: Request, exc: Exception):
             "Access-Control-Allow-Headers": "*"
         }
     )
+
+
+# Startup event
+@app.on_event("startup")
+async def startup_event():
+    """Log startup information."""
+    logger.info(f"Starting {settings.PROJECT_NAME} API")
+    logger.info(f"Upload directory: {UPLOAD_DIR}")
+    logger.info(f"API docs available at /docs")
