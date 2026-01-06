@@ -4,10 +4,16 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.dependencies import get_current_admin
-from app.models import User, Product, Order, UserRole, ProductStatus, Project, Message, MessageStatus, Partner, Integration, News, Banner
+from app.models import User, Product, Order, UserRole, ProductStatus, Project, Message, MessageStatus, Partner, Integration, News, Banner, CategoryProject
 from app.schemas import ProductResponse, ProductModeration, UserResponse, UserAdminResponse, OrderResponse
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+# Kategoriya ranglari
+CATEGORY_COLORS = [
+    "#00a6a6", "#0a2d5c", "#6366f1", "#f59e0b", "#10b981",
+    "#ec4899", "#8b5cf6", "#14b8a6", "#f97316", "#06b6d4", "#94a3b8"
+]
 
 
 @router.get("/stats")
@@ -287,14 +293,39 @@ def get_analytics(
             "trend": trend
         })
 
-    # Categories breakdown
-    categories_data = [
-        {"name": "Web dasturlash", "value": 35, "color": "#00a6a6"},
-        {"name": "Mobil ilovalar", "value": 28, "color": "#0a2d5c"},
-        {"name": "AI/ML loyihalar", "value": 18, "color": "#6366f1"},
-        {"name": "E-commerce", "value": 12, "color": "#f59e0b"},
-        {"name": "Boshqalar", "value": 7, "color": "#94a3b8"}
-    ]
+    # Categories breakdown - real ma'lumotlar loyihalar jadvalidan
+    # Kategoriya bo'yicha loyihalar ko'rishlarini hisoblash
+    category_stats = db.query(
+        Project.category,
+        func.sum(Project.views).label('total_views')
+    ).group_by(Project.category).all()
+    
+    total_views = sum(stat.total_views or 0 for stat in category_stats) or 1
+    
+    categories_data = []
+    for idx, stat in enumerate(category_stats):
+        if stat.category and stat.total_views:
+            # CategoryProject dan kategoriya nomini olish
+            cat = db.query(CategoryProject).filter(
+                CategoryProject.name_uz == stat.category
+            ).first()
+            
+            cat_name = cat.name_uz if cat else stat.category
+            percentage = round((stat.total_views / total_views) * 100)
+            
+            categories_data.append({
+                "name": cat_name,
+                "value": percentage,
+                "views": stat.total_views,
+                "color": CATEGORY_COLORS[idx % len(CATEGORY_COLORS)]
+            })
+    
+    # Agar kategoriya ma'lumotlari bo'sh bo'lsa, xabar ko'rsatish
+    if not categories_data:
+        categories_data = [{"name": "Ma'lumot yo'q", "value": 0, "views": 0, "color": "#94a3b8"}]
+    else:
+        # Ko'rishlar bo'yicha saralash
+        categories_data.sort(key=lambda x: x['views'], reverse=True)
 
     # Message statistics by status
     message_stats = {
