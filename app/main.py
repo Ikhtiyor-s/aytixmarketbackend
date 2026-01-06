@@ -1,11 +1,15 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import settings
 from app.core.database import engine, Base
 import logging
 import os
+import time
 
 # Logger setup
 logging.basicConfig(
@@ -13,7 +17,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-# Routers
+
+# Import routers
 from app.auth.router import router as auth_router
 from app.users.router import router as users_router
 from app.products.router import router as products_router
@@ -34,35 +39,53 @@ from app.translate.router import router as translate_router
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
+# FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="A full-stack marketplace API with Projects",
-    version="1.0.0",
+    description="AyTiX Marketplace - Professional API for Projects and Services",
+    version="2.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
 
-# CORS middleware
+# GZip compression for responses
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# CORS middleware - production va development uchun
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition", "X-Total-Count"],
+    max_age=600
 )
 
-# Backend papkasida uploads saqlash
+
+# Request timing middleware
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(round(process_time * 1000, 2)) + "ms"
+    return response
+
+
+# Upload directories setup
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(os.path.dirname(BASE_DIR), "uploads")
 IMAGES_DIR = os.path.join(UPLOAD_DIR, "images")
 VIDEOS_DIR = os.path.join(UPLOAD_DIR, "videos")
 
-# Papkalarni yaratish
+# Create directories
 os.makedirs(IMAGES_DIR, exist_ok=True)
 os.makedirs(VIDEOS_DIR, exist_ok=True)
-print(f"UPLOAD_DIR: {UPLOAD_DIR}")
+logger.info(f"Upload directory: {UPLOAD_DIR}")
 
-# Mount static files for uploads (images va videos)
+# Mount static files
 app.mount("/uploads/images", StaticFiles(directory=IMAGES_DIR), name="images")
 app.mount("/uploads/videos", StaticFiles(directory=VIDEOS_DIR), name="videos")
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
@@ -86,31 +109,75 @@ app.include_router(ai_features_router, prefix=settings.API_V1_PREFIX)
 app.include_router(translate_router, prefix=settings.API_V1_PREFIX)
 
 
+# Root endpoint
 @app.get("/")
 def root():
-    return {"message": "Marketplace API", "docs": "/docs"}
+    return {
+        "message": "AyTiX Marketplace API",
+        "version": "2.0.0",
+        "docs": "/docs",
+        "health": "/health"
+    }
 
 
+# Health check endpoint
 @app.get("/health")
 def health():
-    """Health check endpoint for monitoring."""
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "version": "2.0.0"
+    }
 
 
+# API v1 health check
 @app.get("/api/v1/health")
 def api_health():
-    """API health check endpoint."""
-    return {"status": "healthy", "version": "1.0.0"}
+    return {"status": "healthy", "version": "2.0.0"}
 
 
-# Global exception handler with CORS support
+# HTTP Exception handler
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
+
+
+# Validation Exception handler
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.warning(f"Validation error: {exc.errors()}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": "Validation error",
+            "errors": exc.errors()
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
+
+
+# Global Exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle all unhandled exceptions with CORS headers."""
+    """Handle all unhandled exceptions."""
     logger.error(f"Unhandled exception on {request.url}: {str(exc)}", exc_info=True)
     return JSONResponse(
-        status_code=500,
-        content={"detail": f"Internal server error: {str(exc)}"},
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal server error",
+            "message": str(exc) if settings.DEBUG else "An unexpected error occurred"
+        },
         headers={
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "*",
@@ -122,7 +189,15 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    """Log startup information."""
-    logger.info(f"Starting {settings.PROJECT_NAME} API")
+    logger.info("=" * 50)
+    logger.info("AyTiX Marketplace API starting...")
+    logger.info(f"Debug mode: {settings.DEBUG}")
+    logger.info(f"API prefix: {settings.API_V1_PREFIX}")
     logger.info(f"Upload directory: {UPLOAD_DIR}")
-    logger.info(f"API docs available at /docs")
+    logger.info("=" * 50)
+
+
+# Shutdown event
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("AyTiX Marketplace API shutting down...")
