@@ -39,12 +39,57 @@ LANGUAGE_NAMES = {
 }
 
 
+def transliterate_to_cyrillic(text: str) -> str:
+    """Inglizcha so'zlarni kirill alifbosiga transliteratsiya qilish"""
+    # Inglizcha harflardan kirill harflariga mapping
+    latin_to_cyrillic = {
+        'a': 'а', 'b': 'б', 'c': 'к', 'd': 'д', 'e': 'е', 'f': 'ф',
+        'g': 'г', 'h': 'х', 'i': 'и', 'j': 'дж', 'k': 'к', 'l': 'л',
+        'm': 'м', 'n': 'н', 'o': 'о', 'p': 'п', 'q': 'к', 'r': 'р',
+        's': 'с', 't': 'т', 'u': 'у', 'v': 'в', 'w': 'в', 'x': 'кс',
+        'y': 'и', 'z': 'з',
+        'A': 'А', 'B': 'Б', 'C': 'К', 'D': 'Д', 'E': 'Е', 'F': 'Ф',
+        'G': 'Г', 'H': 'Х', 'I': 'И', 'J': 'Дж', 'K': 'К', 'L': 'Л',
+        'M': 'М', 'N': 'Н', 'O': 'О', 'P': 'П', 'Q': 'К', 'R': 'Р',
+        'S': 'С', 'T': 'Т', 'U': 'У', 'V': 'В', 'W': 'В', 'X': 'Кс',
+        'Y': 'И', 'Z': 'З'
+    }
+
+    result = []
+    for char in text:
+        if char in latin_to_cyrillic:
+            result.append(latin_to_cyrillic[char])
+        else:
+            result.append(char)
+    return ''.join(result)
+
+
+def fix_russian_translation(text: str) -> str:
+    """Rus tarjimasidagi inglizcha so'zlarni kirill alifbosiga o'girish"""
+    import re
+
+    # Inglizcha so'zlarni topish (2 yoki undan ko'p lotin harflari)
+    def replace_english(match):
+        english_word = match.group(0)
+        return transliterate_to_cyrillic(english_word)
+
+    # Faqat lotin harflaridan iborat so'zlarni topish
+    result = re.sub(r'\b[A-Za-z]{2,}\b', replace_english, text)
+    return result
+
+
 def translate_text_google(text: str, source_lang: str, target_lang: str) -> str:
     """Google Translate orqali tarjima qilish (bepul)"""
     try:
         translator = GoogleTranslator(source=LANG_CODES[source_lang], target=LANG_CODES[target_lang])
         result = translator.translate(text)
-        return result if result else text
+
+        if result:
+            # Rus tiliga tarjima qilganda, inglizcha so'zlarni kirill ga o'girish
+            if target_lang == 'ru':
+                result = fix_russian_translation(result)
+            return result
+        return text
     except Exception as e:
         logger.error(f"Google Translate xatoligi: {str(e)}")
         raise e
