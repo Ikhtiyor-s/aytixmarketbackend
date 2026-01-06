@@ -1,12 +1,51 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from sqlalchemy import func
+from typing import List, Optional, Dict
 from app.core.database import get_db
 from app.dependencies import get_current_user, get_current_admin
 from app.models import Project, User, ProjectStatus
 from app.schemas import ProjectCreate, ProjectUpdate, ProjectResponse
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+@router.get("/counts")
+def get_project_counts(
+    db: Session = Depends(get_db)
+):
+    """Get project counts by category and subcategory."""
+    # Get counts by category
+    category_counts = db.query(
+        Project.category,
+        func.count(Project.id).label('count')
+    ).filter(
+        Project.status == ProjectStatus.ACTIVE
+    ).group_by(Project.category).all()
+
+    categories = {cat: count for cat, count in category_counts}
+
+    # Get counts by subcategory
+    subcategory_counts = db.query(
+        Project.category,
+        Project.subcategory,
+        func.count(Project.id).label('count')
+    ).filter(
+        Project.status == ProjectStatus.ACTIVE,
+        Project.subcategory.isnot(None),
+        Project.subcategory != ''
+    ).group_by(Project.category, Project.subcategory).all()
+
+    subcategories = {}
+    for cat, subcat, count in subcategory_counts:
+        if subcat:
+            key = f"{cat}:{subcat}"
+            subcategories[key] = count
+
+    return {
+        "categories": categories,
+        "subcategories": subcategories
+    }
 
 
 @router.get("/", response_model=List[ProjectResponse])
