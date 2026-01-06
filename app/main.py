@@ -1,10 +1,15 @@
-from fastapi import FastAPI, Request, status
+"""
+AyTiX Marketplace API
+Production-ready FastAPI backend
+"""
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.core.database import engine, Base
 import logging
@@ -49,17 +54,46 @@ app = FastAPI(
     openapi_url="/openapi.json"
 )
 
+
+# Custom CORS Middleware for better control
+class CORSMiddlewareCustom(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Handle preflight OPTIONS requests
+        if request.method == "OPTIONS":
+            response = Response(status_code=204)
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Max-Age"] = "600"
+            return response
+
+        # Process the request
+        response = await call_next(request)
+
+        # Add CORS headers to all responses
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+
+        return response
+
+
+# Add custom CORS middleware first (for handling OPTIONS and adding headers)
+app.add_middleware(CORSMiddlewareCustom)
+
 # GZip compression for responses
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS middleware - production va development uchun
+# Standard CORS middleware as backup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition", "X-Total-Count"],
+    expose_headers=["Content-Disposition", "X-Total-Count", "*"],
     max_age=600
 )
 
@@ -86,9 +120,12 @@ os.makedirs(VIDEOS_DIR, exist_ok=True)
 logger.info(f"Upload directory: {UPLOAD_DIR}")
 
 # Mount static files
-app.mount("/uploads/images", StaticFiles(directory=IMAGES_DIR), name="images")
-app.mount("/uploads/videos", StaticFiles(directory=VIDEOS_DIR), name="videos")
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+try:
+    app.mount("/uploads/images", StaticFiles(directory=IMAGES_DIR), name="images")
+    app.mount("/uploads/videos", StaticFiles(directory=VIDEOS_DIR), name="videos")
+    app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+except Exception as e:
+    logger.warning(f"Could not mount static files: {e}")
 
 # Include routers
 app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
@@ -112,6 +149,7 @@ app.include_router(translate_router, prefix=settings.API_V1_PREFIX)
 # Root endpoint
 @app.get("/")
 def root():
+    """Root endpoint with API info."""
     return {
         "message": "AyTiX Marketplace API",
         "version": "2.0.0",
@@ -123,16 +161,19 @@ def root():
 # Health check endpoint
 @app.get("/health")
 def health():
+    """Health check endpoint for monitoring and load balancers."""
     return {
         "status": "healthy",
-        "version": "2.0.0"
+        "version": "2.0.0",
+        "timestamp": time.time()
     }
 
 
 # API v1 health check
 @app.get("/api/v1/health")
 def api_health():
-    return {"status": "healthy", "version": "2.0.0"}
+    """API v1 health check endpoint."""
+    return {"status": "healthy", "version": "2.0.0", "timestamp": time.time()}
 
 
 # HTTP Exception handler
@@ -170,7 +211,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Global Exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle all unhandled exceptions."""
+    """Handle all unhandled exceptions with CORS support."""
     logger.error(f"Unhandled exception on {request.url}: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -189,15 +230,19 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Startup event
 @app.on_event("startup")
 async def startup_event():
+    """Log startup information."""
     logger.info("=" * 50)
     logger.info("AyTiX Marketplace API starting...")
+    logger.info(f"Version: 2.0.0")
     logger.info(f"Debug mode: {settings.DEBUG}")
     logger.info(f"API prefix: {settings.API_V1_PREFIX}")
     logger.info(f"Upload directory: {UPLOAD_DIR}")
+    logger.info(f"API docs available at /docs")
     logger.info("=" * 50)
 
 
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
+    """Cleanup on shutdown."""
     logger.info("AyTiX Marketplace API shutting down...")
