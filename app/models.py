@@ -501,6 +501,36 @@ class ConnectedIntegration(Base):
     integration_project = relationship("IntegrationProject", back_populates="connected_integrations")
 
 
+class FAQ(Base):
+    """Ko'p so'raladigan savollar - Frequently Asked Questions"""
+    __tablename__ = "faqs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Multilingual question
+    question_uz = Column(String, nullable=False)
+    question_ru = Column(String, nullable=True)
+    question_en = Column(String, nullable=True)
+
+    # Multilingual answer
+    answer_uz = Column(Text, nullable=False)
+    answer_ru = Column(Text, nullable=True)
+    answer_en = Column(Text, nullable=True)
+
+    # Category for grouping
+    category = Column(String, nullable=True)
+
+    # Order/priority
+    order = Column(Integer, default=0, index=True)
+
+    # Status (active/inactive as string for DB compatibility)
+    status = Column(String, default="active")
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class AuthMethod(str, enum.Enum):
     TELEGRAM = "telegram"
     EMAIL = "email"

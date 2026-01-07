@@ -750,4 +750,43 @@ class AIFeatureResponse(AIFeatureBase):
         from_attributes = True
 
 
+# ============ FAQ SCHEMAS ============
+
+class FAQBase(BaseModel):
+    question_uz: str
+    question_ru: Optional[str] = None
+    question_en: Optional[str] = None
+    answer_uz: str
+    answer_ru: Optional[str] = None
+    answer_en: Optional[str] = None
+    category: Optional[str] = None
+    order: Optional[int] = 0
+    status: Optional[str] = "active"
+
+
+class FAQCreate(FAQBase):
+    pass
+
+
+class FAQUpdate(BaseModel):
+    question_uz: Optional[str] = None
+    question_ru: Optional[str] = None
+    question_en: Optional[str] = None
+    answer_uz: Optional[str] = None
+    answer_ru: Optional[str] = None
+    answer_en: Optional[str] = None
+    category: Optional[str] = None
+    order: Optional[int] = None
+    status: Optional[str] = None
+
+
+class FAQResponse(FAQBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 
