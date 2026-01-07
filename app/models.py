@@ -585,3 +585,138 @@ class AIFeature(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
+# ============== FOOTER MODELS ==============
+
+class FooterSection(Base):
+    """Footer bo'limlari - Ijtimoiy tarmoqlar, Hamkorlar, Sahifalar, Bog'lanish"""
+    __tablename__ = "footer_sections"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Multilingual title
+    title_uz = Column(String, nullable=False)
+    title_ru = Column(String, nullable=True)
+    title_en = Column(String, nullable=True)
+
+    # Slug for URL
+    slug = Column(String(100), unique=True, nullable=False, index=True)
+
+    # Order/priority
+    order = Column(Integer, default=0, index=True)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    items = relationship("FooterItem", back_populates="section", cascade="all, delete-orphan", order_by="FooterItem.order")
+
+
+class FooterItem(Base):
+    """Footer elementlari - har bir bo'limdagi linklar"""
+    __tablename__ = "footer_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Section relation
+    section_id = Column(Integer, ForeignKey("footer_sections.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # Multilingual title
+    title_uz = Column(String, nullable=False)
+    title_ru = Column(String, nullable=True)
+    title_en = Column(String, nullable=True)
+
+    # Link URL
+    link_url = Column(String(500), nullable=True)
+
+    # Icon (FontAwesome class yoki emoji)
+    icon = Column(String(100), nullable=True)
+
+    # Icon type: 'fontawesome', 'emoji', 'image', 'svg'
+    icon_type = Column(String(20), default='fontawesome')
+
+    # Open in new tab
+    new_tab = Column(Boolean, default=False)
+
+    # Order/priority
+    order = Column(Integer, default=0, index=True)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    section = relationship("FooterSection", back_populates="items")
+
+
+class FooterSocialLink(Base):
+    """Ijtimoiy tarmoq linklari - alohida jadval"""
+    __tablename__ = "footer_social_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Platform name
+    platform = Column(String(50), nullable=False)  # telegram, instagram, facebook, youtube, tiktok, linkedin
+
+    # Multilingual title (optional override)
+    title_uz = Column(String, nullable=True)
+    title_ru = Column(String, nullable=True)
+    title_en = Column(String, nullable=True)
+
+    # Link URL
+    link_url = Column(String(500), nullable=False)
+
+    # Icon (auto-generated based on platform or custom)
+    icon = Column(String(100), nullable=True)
+
+    # Order/priority
+    order = Column(Integer, default=0, index=True)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class FooterContact(Base):
+    """Bog'lanish ma'lumotlari"""
+    __tablename__ = "footer_contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Contact type: phone, email, address, telegram, whatsapp
+    contact_type = Column(String(50), nullable=False)
+
+    # Multilingual label
+    label_uz = Column(String, nullable=True)
+    label_ru = Column(String, nullable=True)
+    label_en = Column(String, nullable=True)
+
+    # Value (phone number, email, address, etc)
+    value = Column(String(500), nullable=False)
+
+    # Link URL (tel:, mailto:, https://)
+    link_url = Column(String(500), nullable=True)
+
+    # Icon
+    icon = Column(String(100), nullable=True)
+
+    # Order/priority
+    order = Column(Integer, default=0, index=True)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
