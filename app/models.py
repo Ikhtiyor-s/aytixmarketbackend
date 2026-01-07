@@ -720,3 +720,34 @@ class FooterContact(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
+# ==================== FAQ MODEL ====================
+class FAQ(Base):
+    """Ko'p so'raladigan savollar modeli"""
+    __tablename__ = "faqs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Savol - 3 tilda
+    question_uz = Column(String(500), nullable=False)
+    question_ru = Column(String(500), nullable=True)
+    question_en = Column(String(500), nullable=True)
+
+    # Javob - 3 tilda
+    answer_uz = Column(Text, nullable=False)
+    answer_ru = Column(Text, nullable=True)
+    answer_en = Column(Text, nullable=True)
+
+    # Kategoriya (ixtiyoriy)
+    category = Column(String(100), nullable=True)
+
+    # Order/priority
+    order = Column(Integer, default=0, index=True)
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
