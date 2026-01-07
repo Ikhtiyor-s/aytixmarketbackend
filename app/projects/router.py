@@ -53,6 +53,7 @@ def list_projects(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     category: Optional[str] = None,
+    subcategory: Optional[str] = None,
     status: Optional[ProjectStatus] = None,
     is_top: Optional[bool] = None,
     is_new: Optional[bool] = None,
@@ -65,6 +66,8 @@ def list_projects(
     # Apply filters
     if category:
         query = query.filter(Project.category == category)
+    if subcategory:
+        query = query.filter(Project.subcategory == subcategory)
     if status:
         query = query.filter(Project.status == status)
     if is_top is not None:
